@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0e1118">
+<title>Eco de Colores</title>
+<style>
+html {
+  box-sizing: border-box;
+  background: #0e1118;
+  padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+}
+body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+<style>
+/* Layout: pantalla completa. Tablero de 4 colores (2x2) con un círculo central de estado y una barra de 4 controles abajo.
+   Se recorre con el dedo, la app habla, y se elige con doble toque. Un solo look oscuro de alto contraste. */
+:root {
+  --bg: #0e1118;
+  --fg: #f5f7fb;
+  --muted: #aab2c5;
+  --panel: #1b2130;
+  --panel-on: #3a4668;
+  --verde: #138a4a;    --verde-lit: #5cff9d;    --verde-on: #ffffff;
+  --rojo: #b3262d;     --rojo-lit: #ff7a7e;     --rojo-on: #ffffff;
+  --amarillo: #c79a06; --amarillo-lit: #ffe45c; --amarillo-on: #17120a;
+  --azul: #2557c9;     --azul-lit: #7aa8ff;     --azul-on: #ffffff;
+  --lit-on: #0b0d12;
+  --cap-bg: #0e1118e6;
+  --font: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.app { position: relative; height: 100%; display: flex; flex-direction: column; touch-action: none; }
+.board { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+.zone {
+  appearance: none; -webkit-appearance: none;
+  border: 0; margin: 0; padding: 0; border-radius: 0;
+  display: flex; position: relative; cursor: pointer;
+  font: inherit; color: var(--on); background: var(--c);
+  box-shadow: inset 0 0 0 3px var(--bg);
+}
+.zone.lit { background: var(--lit); color: var(--lit-on); }
+.zone:focus-visible, .ctl:focus-visible, .core:focus-visible { outline: 5px solid #fff; outline-offset: -11px; }
+.z-verde    { --c: var(--verde);    --lit: var(--verde-lit);    --on: var(--verde-on);    align-items: flex-start; justify-content: flex-start; }
+.z-rojo     { --c: var(--rojo);     --lit: var(--rojo-lit);     --on: var(--rojo-on);     align-items: flex-start; justify-content: flex-end; }
+.z-amarillo { --c: var(--amarillo); --lit: var(--amarillo-lit); --on: var(--amarillo-on); align-items: flex-end;   justify-content: flex-start; }
+.z-azul     { --c: var(--azul);     --lit: var(--azul-lit);     --on: var(--azul-on);     align-items: flex-end;   justify-content: flex-end; }
+.tag {
+  padding: 22px max(16px, env(safe-area-inset-right, 0px)) 22px max(16px, env(safe-area-inset-left, 0px));
+  font-size: clamp(1.25rem, 5.5vw, 2rem);
+  font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+.core {
+  appearance: none; -webkit-appearance: none;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: clamp(92px, 24vmin, 150px); height: clamp(92px, 24vmin, 150px);
+  border-radius: 50%; padding: 0; margin: 0;
+  background: var(--bg); color: var(--fg); border: 5px solid var(--fg);
+  font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  cursor: pointer;
+}
+.core .k { font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.core .n { font-size: clamp(2rem, 8vmin, 3rem); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+
+.bar { flex: none; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: 1fr 1fr; height: clamp(144px, 24%, 190px); }
+.ctl {
+  appearance: none; -webkit-appearance: none;
+  border: 0; margin: 0; border-radius: 0; cursor: pointer;
+  background: var(--panel); color: var(--fg);
+  font: inherit; font-weight: 700; font-size: 0.95rem; line-height: 1.15; text-align: center;
+  padding: 6px 8px; overflow-wrap: anywhere; grid-column: span 3;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 0 0 2px var(--bg);
+}
+.ctl.primary { background: var(--fg); color: var(--bg); grid-column: span 7; font-size: 1.5rem; }
+.ctl.diff { grid-column: span 5; font-size: 1.15rem; }
+.ctl[aria-disabled="true"] { opacity: 0.45; }
+.ctl.tog { flex-direction: column; gap: 3px; }
+.ctl.tog .nm { font-size: 0.88rem; }
+.ctl.tog .st { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
+.ctl.tog.is-on { background: var(--panel-on); box-shadow: inset 0 0 0 3px var(--fg); }
+.ctl.tog.is-on .st { font-weight: 700; color: var(--fg); }
+
+.cap {
+  position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+  max-width: calc(100% - 32px); box-sizing: border-box;
+  padding: 8px 16px; border-radius: 18px;
+  background: var(--cap-bg); color: var(--fg);
+  font-size: 1rem; font-weight: 700; text-align: center;
+  pointer-events: none; z-index: 5;
+}
+.cap.long {
+  width: calc(100% - 32px); max-width: 720px;
+  padding: 14px 18px; text-align: left;
+  font-size: min(1rem, 2.4vh); line-height: 1.4; font-weight: 400;
+  background: var(--bg); box-shadow: 0 0 0 2px var(--fg);
+}
+.edge { position: absolute; background: var(--fg); opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 6; }
+.edge.on { opacity: 1; }
+.e-top { top: 0; left: 0; right: 0; height: 9px; }
+.e-bottom { bottom: 0; left: 0; right: 0; height: 9px; }
+.e-left { top: 0; bottom: 0; left: 0; width: 9px; }
+.e-right { top: 0; bottom: 0; right: 0; width: 9px; }
+/* En la app, el lector de pantalla se detecta solo: se oculta el botón y quedan 3 en la fila */
+.bar.native .ctl:not(.primary):not(.diff) { grid-column: span 4; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="app" id="app">
+  <h1 class="sr">Eco de Colores</h1>
+  <div id="vivo" class="sr" aria-live="polite" aria-atomic="true"></div>
+
+  <div class="board" role="group" aria-label="Tablero de colores">
+    <button class="zone z-verde" id="z-verde" data-reg="verde" aria-label="Verde, arriba a la izquierda"><span class="tag" aria-hidden="true">Verde</span></button>
+    <button class="zone z-rojo" id="z-rojo" data-reg="rojo" aria-label="Rojo, arriba a la derecha"><span class="tag" aria-hidden="true">Rojo</span></button>
+    <button class="zone z-amarillo" id="z-amarillo" data-reg="amarillo" aria-label="Amarillo, abajo a la izquierda"><span class="tag" aria-hidden="true">Amarillo</span></button>
+    <button class="zone z-azul" id="z-azul" data-reg="azul" aria-label="Azul, abajo a la derecha"><span class="tag" aria-hidden="true">Azul</span></button>
+    <button class="core" id="core" data-reg="centro" aria-label="Centro"><span class="k" aria-hidden="true">Nivel</span><span class="n" id="nivel" aria-hidden="true">0</span></button>
+  </div>
+
+  <div class="bar" role="group" aria-label="Controles">
+    <button class="ctl primary" id="b-empezar" data-reg="empezar">Empezar</button>
+    <button class="ctl diff" id="b-dificultad" data-reg="dificultad">Dificultad: Normal</button>
+    <button class="ctl" id="b-nombres" data-reg="nombres">Decir colores: no</button>
+    <button class="ctl" id="b-bordes" data-reg="bordes">Avisar bordes: sí</button>
+    <button class="ctl" id="b-voz" data-reg="voz">Modo TalkBack: no</button>
+    <button class="ctl" id="b-ayuda" data-reg="ayuda">Ayuda</button>
+  </div>
+
+  <div class="cap" id="cap" aria-hidden="true">Tocá la pantalla para empezar</div>
+  <i class="edge e-top" id="e-top" aria-hidden="true"></i>
+  <i class="edge e-bottom" id="e-bottom" aria-hidden="true"></i>
+  <i class="edge e-left" id="e-left" aria-hidden="true"></i>
+  <i class="edge e-right" id="e-right" aria-hidden="true"></i>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  document.documentElement.lang = 'es';
+
+  /* ---------- App nativa (Capacitor): voz, vibración y lector de pantalla del teléfono ---------- */
+  const CAP = window.Capacitor;
+  const isNative = !!(CAP && typeof CAP.isNativePlatform === 'function' && CAP.isNativePlatform());
+  const plug = (name) => {
+    if (!isNative) return null;
+    try { return CAP.registerPlugin(name); } catch (e) { return (CAP.Plugins && CAP.Plugins[name]) || null; }
+  };
+  const nTTS = plug('TextToSpeech');
+  const nHaptics = plug('Haptics');
+  const nReader = plug('ScreenReader');
+  const platform = isNative && CAP.getPlatform ? CAP.getPlatform() : 'web';
+
+  /* ---------- Ajustes guardados (opcionales) ---------- */
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('simon.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('simon.' + k, JSON.stringify(v)); } catch (e) {} }
+  };
+  let names = store.get('names', false);
+  let voiceMode = store.get('voice', 'app');   // 'app' = voz propia, 'lector' = lector de pantalla
+  let edgesOn = store.get('edges', true);
+  let seen = store.get('seen', false);
+  const INTRO = 'Bienvenidos a Eco de Colores. Arrastrá el dedo para explorar y tocá dos veces para elegir. Escuchá la secuencia de colores y repetila en orden. Para jugar, tocá dos veces Empezar, en la parte de abajo.';
+  const DIFFS = {
+    facil:   { name: 'Fácil',   start: 1, add: 1, base: 700, floor: 380, decay: 18, gap: 220, info: 'Lento, un color más por nivel.' },
+    normal:  { name: 'Normal',  start: 1, add: 1, base: 500, floor: 290, decay: 16, gap: 140, info: 'Más rápido, un color más por nivel.' },
+    dificil: { name: 'Difícil', start: 2, add: 2, base: 380, floor: 190, decay: 12, gap: 80,  info: 'Muy rápido. Arranca con dos colores y suma dos por nivel.' }
+  };
+  const ORDER = ['facil', 'normal', 'dificil'];
+  let diff = store.get('diff', 'normal');
+  if (!DIFFS[diff]) diff = 'normal';
+  let best = 0;
+  const loadBest = () => { best = store.get('best_' + diff, 0); };
+  loadBest();
+
+  /* ---------- Elementos ---------- */
+  const $ = (id) => document.getElementById(id);
+  const stage = $('app'), capEl = $('cap'), liveEl = $('vivo'), levelEl = $('nivel'), coreEl = $('core');
+
+  const ZONES = [
+    { id: 'verde',    name: 'Verde',    pos: 'arriba a la izquierda', freq: 523.25, type: 'triangle', pan: -0.8, mul: 1.0 },
+    { id: 'rojo',     name: 'Rojo',     pos: 'arriba a la derecha',   freq: 659.25, type: 'sine',     pan:  0.8, mul: 1.1 },
+    { id: 'amarillo', name: 'Amarillo', pos: 'abajo a la izquierda',  freq: 220, type: 'sawtooth', pan: -0.8, mul: 0.55 },
+    { id: 'azul',     name: 'Azul',     pos: 'abajo a la derecha',    freq: 392, type: 'square',   pan:  0.8, mul: 0.4 }
+  ];
+
+  /* ---------- Audio ---------- */
+  let ctx = null;
+  function ensureAudio() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) { try { ctx = new AC(); } catch (e) { ctx = null; } }
+    }
+    if (ctx && ctx.state === 'suspended') { ctx.resume().catch(() => {}); }
+    return ctx;
+  }
+  function tone(o) {
+    const c = ensureAudio(); if (!c) return;
+    const freq = o.freq, type = o.type || 'sine', pan = o.pan || 0, vol = Math.max(o.vol || 0.2, 0.0002);
+    const dur = o.dur || 0.3, attack = o.attack || 0.01, t0 = c.currentTime + (o.when || 0);
+    try {
+      const osc = c.createOscillator(); osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      if (o.glideTo) osc.frequency.exponentialRampToValueAtTime(o.glideTo, t0 + dur);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + attack);
+      g.gain.setValueAtTime(vol, t0 + Math.max(attack + 0.002, dur - 0.09));
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g);
+      let out = g;
+      if (o.filter) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = o.filter; out.connect(f); out = f; }
+      if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = pan; out.connect(p); out = p; }
+      out.connect(c.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.05);
+    } catch (e) {}
+  }
+  function playZone(z, o) {
+    o = o || {};
+    tone({ freq: z.freq, type: z.type, pan: z.pan, vol: (o.vol || 0.3) * z.mul, dur: o.dur || 0.5, filter: 2200 });
+  }
+  function edgeTick(edge) {
+    edge.split('-').forEach((p, i) => {
+      const o = { top: { f: 1500, pan: 0 }, bottom: { f: 170, pan: 0 }, left: { f: 900, pan: -1 }, right: { f: 900, pan: 1 } }[p];
+      tone({ freq: o.f, type: 'square', pan: o.pan, vol: 0.07, dur: 0.06, attack: 0.004, filter: 3000, when: i * 0.09 });
+    });
+  }
+  function blip(f) { tone({ freq: f, type: 'sine', vol: 0.09, dur: 0.08 }); }
+  function chime(up) {
+    (up ? [660, 880] : [520, 660]).forEach((fr, i) => tone({ freq: fr, type: 'sine', vol: 0.16, dur: 0.16, when: i * 0.13 }));
+  }
+  function buzzer() { tone({ freq: 150, type: 'sawtooth', vol: 0.18, dur: 0.6, glideTo: 70, filter: 900 }); }
+  function buzz(p) {
+    if (nHaptics) {
+      try {
+        if (platform === 'ios') {
+          if (Array.isArray(p)) nHaptics.notification({ type: 'SUCCESS' });
+          else if (p >= 400) nHaptics.notification({ type: 'ERROR' });
+          else nHaptics.impact({ style: p >= 50 ? 'MEDIUM' : 'LIGHT' });
+        } else if (Array.isArray(p)) {
+          let t = 0;
+          p.forEach((ms, i) => { if (i % 2 === 0) setTimeout(() => { try { nHaptics.vibrate({ duration: ms }); } catch (e) {} }, t); t += ms; });
+        } else {
+          nHaptics.vibrate({ duration: p });
+        }
+      } catch (e) {}
+      return;
+    }
+    try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {}
+  }
+
+  /* ---------- Voz ---------- */
+  const synth = window.speechSynthesis || null;
+  let voiceObj = null;
+  function pickVoice() {
+    if (!synth) return;
+    const vs = synth.getVoices();
+    voiceObj = vs.find(v => /^es[-_]AR/i.test(v.lang)) || vs.find(v => /^es[-_](419|MX|US)/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)) || null;
+  }
+  if (synth) { pickVoice(); if (synth.addEventListener) synth.addEventListener('voiceschanged', pickVoice); }
+
+  let ttsLang = 'es-AR';
+  function speakNative(text, rate, queue) {
+    return new Promise((resolve) => {
+      const guard = setTimeout(resolve, text.length * 95 + 1500);
+      const done = () => { clearTimeout(guard); resolve(); };
+      try {
+        Promise.resolve(nTTS.speak({ text, lang: ttsLang, rate, pitch: 1.0, volume: 1.0, category: 'ambient', queueStrategy: queue ? 1 : 0 })).then(done, done);
+      } catch (e) { done(); }
+    });
+  }
+
+  function say(text, opts) {
+    const queue = !!(opts && opts.queue);
+    const showCap = !!(opts && opts.cap);
+    capEl.hidden = !showCap;
+    if (showCap) { capEl.textContent = text; capEl.classList.add('long'); }
+    if (voiceMode === 'lector' && !(opts && opts.own) && nReader) {
+      try { nReader.speak({ value: text, language: 'es' }); } catch (e) {}
+      return new Promise(r => setTimeout(r, text.length * 70 + 500));
+    }
+    if (voiceMode === 'lector' && !(opts && opts.own)) {
+      liveEl.textContent = '';
+      setTimeout(() => { liveEl.textContent = text; }, 30);
+      return new Promise(r => setTimeout(r, text.length * 70 + 500));
+    }
+    if (nTTS) return speakNative(text, (opts && opts.rate) || 1, queue);
+    if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+      capEl.classList.remove('long'); capEl.textContent = 'Este navegador no tiene voz. Probá con Chrome o Safari.'; capEl.hidden = false;
+      return Promise.resolve();
+    }
+    return new Promise(res => {
+      try {
+        const busy = synth.speaking || synth.pending;
+        if (!queue && busy) synth.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = (voiceObj && voiceObj.lang) || 'es-AR';
+        if (voiceObj) u.voice = voiceObj;
+        u.rate = (opts && opts.rate) || 1; u.volume = 1;
+        let done = false;
+        const fin = () => { if (!done) { done = true; res(); } };
+        u.onend = fin;
+        u.onerror = (ev) => {
+          const er = ev && ev.error;
+          if (er && er !== 'interrupted' && er !== 'canceled') { capEl.classList.remove('long'); capEl.textContent = 'La voz del teléfono falló (' + er + ').'; capEl.hidden = false; }
+          fin();
+        };
+        setTimeout(fin, text.length * 95 + 1500);
+        const go = () => { try { synth.resume(); synth.speak(u); } catch (e) { fin(); } };
+        if (!queue && busy) setTimeout(go, 80); else go();
+      } catch (e) { res(); }
+    });
+  }
+  const stopSpeech = () => {
+    try { if (nTTS) Promise.resolve(nTTS.stop()).catch(() => {}); } catch (e) {}
+    try { if (synth) synth.cancel(); } catch (e) {}
+  };
+  let speechUnlocked = false;
+  function unlockSpeech() {
+    if (nTTS || speechUnlocked || !synth || typeof SpeechSynthesisUtterance === 'undefined') return;
+    speechUnlocked = true;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); } catch (e) {}
+  }
+
+  /* ---------- Regiones (zonas, centro, botones) ---------- */
+  const R = { list: [], byId: {}, core: null };
+  function addReg(r) { R.list.push(r); R.byId[r.id] = r; }
+  ZONES.forEach((z, i) => {
+    z.idx = i; z.el = $('z-' + z.id);
+    addReg({ id: z.id, kind: 'zone', idx: i, el: z.el, label: () => z.name + ', ' + z.pos });
+  });
+  R.core = {
+    id: 'centro', kind: 'core', el: coreEl,
+    label: () => {
+      const niv = 'Centro. Nivel ' + game.level + '.';
+      if (game.state === 'input') return niv + ' Dos toques repiten la secuencia.';
+      return niv;
+    }
+  };
+  R.byId.centro = R.core;
+  const idleState = () => game.state === 'idle' || game.state === 'over';
+  const CTL = [
+    { id: 'empezar', el: $('b-empezar'), text: () => idleState() ? 'Empezar' : 'Terminar partida', label: () => idleState() ? 'Empezar, botón' : 'Terminar partida, pide confirmación, botón', run: () => { if (idleState()) startGame(); else confirmRestart(); } },
+    { id: 'dificultad', el: $('b-dificultad'), text: () => 'Dificultad: ' + DIFFS[diff].name, label: () => 'Dificultad: ' + DIFFS[diff].name + (idleState() ? '' : '. Bloqueada durante la partida') + '. Botón.', run: () => toggleDiff() },
+    { id: 'nombres', el: $('b-nombres'), title: () => 'Decir colores', sub: () => names ? 'activado' : 'desactivado', on: () => names, label: () => 'Decir el nombre de cada color durante el juego: ' + (names ? 'activado' : 'desactivado') + '. Botón.', run: () => toggleNames() },
+    { id: 'bordes', el: $('b-bordes'), title: () => 'Avisar bordes', sub: () => edgesOn ? 'activado' : 'desactivado', on: () => edgesOn, label: () => 'Avisar cuando tocás un borde de la pantalla: ' + (edgesOn ? 'activado' : 'desactivado') + '. Botón.', run: () => toggleEdges() },
+    { id: 'voz', el: $('b-voz'), title: () => 'Modo TalkBack', sub: () => voiceMode === 'lector' ? 'activado' : 'desactivado', on: () => voiceMode === 'lector', label: () => 'Modo TalkBack: ' + (voiceMode === 'lector' ? 'activado' : 'desactivado') + '. Activalo solo si usás TalkBack o VoiceOver. Botón.', run: () => toggleVoice() },
+    { id: 'ayuda', el: $('b-ayuda'), text: () => 'Ayuda', label: () => 'Ayuda, botón', run: () => help() }
+  ];
+  CTL.forEach(c => { c.kind = 'ctl'; addReg(c); });
+  if (nReader) {
+    $('b-voz').hidden = true;
+    document.querySelector('.bar').classList.add('native');
+    const vi = CTL.findIndex(c => c.id === 'voz'); if (vi >= 0) CTL.splice(vi, 1);
+    const ri = R.list.findIndex(r => r.id === 'voz'); if (ri >= 0) R.list.splice(ri, 1);
+    delete R.byId.voz;
+  }
+
+  function regionAt(x, y) {
+    const cr = coreEl.getBoundingClientRect();
+    const rad = cr.width / 2;
+    if (Math.hypot(x - (cr.left + rad), y - (cr.top + cr.height / 2)) <= rad) return R.core;
+    let best_ = R.list[0], bd = Infinity;
+    for (const r of R.list) {
+      const b = r.el.getBoundingClientRect();
+      const dx = Math.max(b.left - x, 0, x - b.right), dy = Math.max(b.top - y, 0, y - b.bottom);
+      const d = Math.hypot(dx, dy);
+      if (d < bd) { bd = d; best_ = r; }
+      if (d === 0) break;
+    }
+    return best_;
+  }
+  const EDGE_NAME = {
+    top: 'borde superior', bottom: 'borde inferior', left: 'borde izquierdo', right: 'borde derecho',
+    'top-left': 'esquina superior izquierda', 'top-right': 'esquina superior derecha',
+    'bottom-left': 'esquina inferior izquierda', 'bottom-right': 'esquina inferior derecha'
+  };
+  function edgeAt(x, y) {
+    const w = window.innerWidth, h = window.innerHeight;
+    const t = Math.max(32, Math.min(w, h) * 0.085);
+    const v = y < t ? 'top' : (y > h - t ? 'bottom' : '');
+    const hz = x < t ? 'left' : (x > w - t ? 'right' : '');
+    return [v, hz].filter(Boolean).join('-');
+  }
+  function showEdge(e) {
+    ['top', 'bottom', 'left', 'right'].forEach(s => $('e-' + s).classList.toggle('on', !!e && e.split('-').indexOf(s) !== -1));
+  }
+
+  /* ---------- Juego ---------- */
+  const game = { state: 'idle', seq: [], idx: 0, level: 0 };   // idle | showing | input | over
+  let runId = 0;
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  function render() {
+    levelEl.textContent = String(game.level);
+    R.list.forEach(r => r.el.setAttribute('aria-label', r.label()));
+    coreEl.setAttribute('aria-label', R.core.label());
+    CTL.forEach(c => {
+      if (c.sub) {
+        c.el.textContent = '';
+        const a = document.createElement('span'); a.className = 'nm'; a.textContent = c.title();
+        const b = document.createElement('span'); b.className = 'st'; b.textContent = c.sub();
+        c.el.append(a, b);
+        c.el.classList.add('tog');
+        c.el.classList.toggle('is-on', !!c.on());
+      } else {
+        c.el.textContent = c.text();
+      }
+    });
+    $('b-dificultad').setAttribute('aria-disabled', idleState() ? 'false' : 'true');
+  }
+  function setState(s) { game.state = s; render(); }
+  function flash(z, ms) {
+    z.el.classList.add('lit');
+    setTimeout(() => z.el.classList.remove('lit'), ms);
+  }
+
+  async function playSequence(id) {
+    setState('showing');
+    await sleep(450); if (id !== runId) return;
+    const P = DIFFS[diff];
+    const step = Math.max(P.floor, P.base - game.seq.length * P.decay) / 1000;
+    for (const zi of game.seq) {
+      if (id !== runId) return;
+      const z = ZONES[zi];
+      flash(z, step * 1000);
+      playZone(z, { vol: 0.32, dur: step });
+      const sp = names ? say(z.name, { own: true }) : Promise.resolve();
+      await Promise.all([sleep(step * 1000), sp]);
+      if (id !== runId) return;
+      await sleep(P.gap);
+    }
+    if (id !== runId) return;
+    game.idx = 0;
+    setState('input');
+    chime(false); buzz(60);
+    say('Tu turno');
+  }
+
+  async function nextLevel(id, prefix) {
+    const P = DIFFS[diff];
+    const n = game.seq.length === 0 ? P.start : P.add;
+    for (let i = 0; i < n; i++) game.seq.push(Math.floor(Math.random() * 4));
+    game.level = game.level + 1;
+    render();
+    await say((prefix || '') + 'Nivel ' + game.level + '. Escuchá.');
+    if (id !== runId) return;
+    await playSequence(id);
+  }
+
+  function endGame() {
+    runId++; stopSpeech();
+    const done = Math.max(0, game.level - 1);
+    best = Math.max(best, done); store.set('best_' + diff, best);
+    game.seq = []; game.level = 0; game.idx = 0;
+    setState('idle');
+    say('Partida terminada. Récord: ' + best + '. Tocá dos veces Empezar para jugar de nuevo, o Dificultad para cambiarla.');
+  }
+  let restartAt = 0;
+  function confirmRestart() {
+    const now = Date.now();
+    if (now - restartAt < 6000) { restartAt = 0; endGame(); return; }
+    restartAt = now;
+    say('Se va a terminar la partida. Tocá dos veces de nuevo para confirmar.');
+  }
+  function startGame() {
+    restartAt = 0;
+    const id = ++runId;
+    game.seq = []; game.level = 0; game.idx = 0;
+    nextLevel(id, '');
+  }
+
+  async function levelUp() {
+    const id = ++runId;
+    setState('showing');
+    best = Math.max(best, game.level); store.set('best_' + diff, best);
+    await sleep(450); if (id !== runId) return;
+    chime(true); buzz([50, 80, 50]);
+    await sleep(450); if (id !== runId) return;
+    await nextLevel(id, 'Correcto. ');
+  }
+
+  async function gameOver(zi) {
+    const id = ++runId;
+    const exp = ZONES[game.seq[game.idx]];
+    const done = Math.max(0, game.level - 1);
+    best = Math.max(best, done); store.set('best_' + diff, best);
+    setState('over');
+    buzzer(); buzz(600);
+    flash(exp, 900);
+    await sleep(650); if (id !== runId) return;
+    say('Esa no era. Era ' + exp.name + '. Completaste ' + done + (done === 1 ? ' nivel' : ' niveles') + '. Récord: ' + best + '. Tocá dos veces Empezar para jugar de nuevo.');
+  }
+
+  function pick(zi) {
+    if (game.state === 'showing') return;
+    if (game.state !== 'input') { say('Para jugar, tocá dos veces Empezar, abajo en la pantalla.'); return; }
+    const z = ZONES[zi];
+    if (zi === game.seq[game.idx]) {
+      flash(z, 260); playZone(z, { vol: 0.4, dur: 0.35 }); buzz(40);
+      if (names) say(z.name, { own: true });
+      game.idx++;
+      if (game.idx >= game.seq.length) levelUp();
+    } else {
+      gameOver(zi);
+    }
+  }
+
+  function replay() {
+    const id = ++runId;
+    game.idx = 0;
+    say('Escuchá de nuevo.').then(() => { if (id === runId) playSequence(id); });
+  }
+  function coreAction() {
+    if (game.state === 'input') replay();
+    else say(R.core.label());
+  }
+  function toggleNames() {
+    names = !names; store.set('names', names); render();
+    say(names ? 'Activado. Voy a decir cada color mientras suena la secuencia.' : 'Desactivado. No digo los colores. Solo suenan.');
+  }
+  function toggleDiff() {
+    if (!idleState()) { say('La dificultad no se puede cambiar durante la partida. Tocá dos veces Terminar partida para poder cambiarla.'); return; }
+    diff = ORDER[(ORDER.indexOf(diff) + 1) % ORDER.length]; store.set('diff', diff);
+    loadBest();
+    runId++; game.seq = []; game.level = 0; game.idx = 0;
+    setState('idle');
+    say('Dificultad ' + DIFFS[diff].name + '. ' + DIFFS[diff].info + ' Récord: ' + best + '. Tocá dos veces Empezar.');
+  }
+  function toggleEdges() {
+    edgesOn = !edgesOn; store.set('edges', edgesOn);
+    cur.edge = ''; showEdge(''); render();
+    say(edgesOn ? 'Activado. Aviso con sonido y voz cuando tocás un borde de la pantalla.' : 'Desactivado. Sin aviso de bordes.');
+  }
+  function toggleVoice() {
+    manualVoice = true;
+    voiceMode = voiceMode === 'app' ? 'lector' : 'app'; store.set('voice', voiceMode);
+    stopSpeech(); render();
+    say(voiceMode === 'app'
+      ? 'Modo TalkBack desactivado. La app habla sola: explorá con un dedo y tocá dos veces para elegir.'
+      : 'Modo TalkBack activado. Usá tu lector de pantalla como siempre.');
+  }
+  function help() {
+    say(INTRO + ' Más detalles. La pantalla tiene cuatro zonas de color: verde arriba a la izquierda, rojo arriba a la derecha, amarillo abajo a la izquierda y azul abajo a la derecha. Cada una tiene su propio sonido. ' +
+        'Arrastrá el dedo para explorar: te digo dónde estás, y suena una marca cuando llegás a un borde de la pantalla. ' +
+        '' +
+        'En el círculo del centro, un toque te dice tu nivel y dos toques repiten la secuencia. ' +
+        'Abajo están los botones. Empezar arranca la partida. Decir colores hace que te diga cada color mientras suena la secuencia. Avisar bordes marca con sonido y voz cuando tocás un borde de la pantalla. Modo TalkBack es solo para quien usa TalkBack o VoiceOver. Dificultad cambia la velocidad: Fácil es lento, Normal es más rápido, y Difícil es muy rápido y suma dos colores por nivel. Durante la partida no se puede cambiar la dificultad. Para cambiarla, tocá dos veces Terminar partida y confirmá con un segundo doble toque. Después elegí la dificultad y tocá Empezar. Ayuda repite estas instrucciones.', { cap: true });
+  }
+  function activate(reg) {
+    if (!reg) return;
+    if (reg.kind === 'zone') pick(reg.idx);
+    else if (reg.kind === 'core') coreAction();
+    else if (reg.run) reg.run();
+  }
+
+  /* ---------- Exploración táctil ---------- */
+  const cur = { region: null, edge: '' };
+  function preview(r) {
+    if (r.kind === 'zone') { const z = ZONES[r.idx]; playZone(z, { vol: 0.16, dur: 0.22 }); flash(z, 160); }
+    else if (r.kind === 'core') blip(440);
+    else blip(620);
+  }
+  function exploreAt(x, y) {
+    if (game.state === 'showing') return;
+    const r = regionAt(x, y), e = edgesOn ? edgeAt(x, y) : '';
+    const rc = r.id !== cur.region, ec = e !== cur.edge;
+    if (!rc && !ec) return;
+    cur.region = r.id; cur.edge = e; showEdge(e);
+    let msg = '';
+    if (rc) { msg = r.label(); preview(r); }
+    if (ec && e) { edgeTick(e); msg = rc ? msg + ', ' + EDGE_NAME[e] : EDGE_NAME[e]; }
+    if (msg) say(msg);
+  }
+
+  let manualVoice = false;
+  /* Con TalkBack, el doble toque llega como un clic "virtual" (sin dedo real). */
+  const isVirtualClick = (e) => e.detail === 0 || (!!e.pointerType && e.buttons === 1);
+  let started = false, introBusy = false, introPending = false, ptr = null, lastTap = null, lastUp = 0, resetT = 0;
+  function intro() {
+    store.set('seen', true);
+    introBusy = true;
+    say(INTRO, { rate: 1.2 }).then(() => { introBusy = false; chime(true); });
+    seen = true;
+  }
+
+  stage.addEventListener('pointerdown', (e) => {
+    if (introBusy) { e.preventDefault(); return; }
+    ensureAudio();
+    if (voiceMode === 'lector') return;
+    e.preventDefault();
+    if (!started) { started = true; introPending = true; return; }
+    clearTimeout(resetT);
+    ptr = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: false };
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+    exploreAt(e.clientX, e.clientY);
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!ptr || e.pointerId !== ptr.id) return;
+    if (Math.hypot(e.clientX - ptr.x0, e.clientY - ptr.y0) > 16) ptr.moved = true;
+    exploreAt(e.clientX, e.clientY);
+  });
+  function endPointer(e, cancelled) {
+    if (!ptr || e.pointerId !== ptr.id) return;
+    const now = performance.now();
+    const wasTap = !cancelled && !ptr.moved && (now - ptr.t0) < 400;
+    ptr = null; lastUp = Date.now();
+    showEdge('');
+    clearTimeout(resetT);
+    resetT = setTimeout(() => { cur.region = null; cur.edge = ''; }, 650);
+    if (!wasTap) { lastTap = null; return; }
+    const reg = regionAt(e.clientX, e.clientY);
+    if (lastTap && now - lastTap.t < 550 && lastTap.reg === reg && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 70) {
+      lastTap = null;
+      activate(reg);
+    } else {
+      lastTap = { t: now, x: e.clientX, y: e.clientY, reg: reg };
+    }
+  }
+  stage.addEventListener('pointerup', (e) => {
+    unlockSpeech();
+    if (introPending) { introPending = false; lastUp = Date.now(); intro(); return; }
+    endPointer(e, false);
+  });
+  stage.addEventListener('pointercancel', (e) => endPointer(e, true));
+  stage.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  /* Si TalkBack se apaga: con TalkBack prendido, un arrastre real de dedo no le llega a la página. */
+  let touchStart = null;
+  function goAppMode() {
+    voiceMode = 'app'; stopSpeech(); render();
+    say('TalkBack desactivado. Ahora habla la app.');
+  }
+  document.addEventListener('pointerdown', (e) => {
+    touchStart = (e.pointerType === 'touch' || e.pointerType === 'pen') ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null;
+  }, true);
+  document.addEventListener('pointermove', (e) => {
+    if (!touchStart || e.pointerId !== touchStart.id || voiceMode !== 'lector' || manualVoice || nReader) return;
+    if (Math.hypot(e.clientX - touchStart.x, e.clientY - touchStart.y) > 24) { touchStart = null; goAppMode(); }
+  }, true);
+  document.addEventListener('pointerup', () => { touchStart = null; }, true);
+  document.addEventListener('pointercancel', () => { touchStart = null; }, true);
+
+  /* Clics sin toque previo: lector de pantalla (doble toque) o teclado (Enter / Espacio). */
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest ? e.target.closest('[data-reg]') : null;
+    if (!b) return;
+    const virtual = isVirtualClick(e);
+    if (virtual) {
+      introBusy = false; introPending = false;
+      if (voiceMode === 'app' && !manualVoice && !nReader && navigator.maxTouchPoints > 0) { voiceMode = 'lector'; stopSpeech(); render(); }
+    }
+    if (introBusy) return;
+    if (!virtual && voiceMode === 'app' && Date.now() - lastUp < 500) return;
+    ensureAudio(); unlockSpeech(); started = true;
+    activate(R.byId[b.getAttribute('data-reg')]);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (introBusy || e.ctrlKey || e.metaKey || e.altKey) return;
+    const n = { '1': 0, '2': 1, '3': 2, '4': 3 }[e.key];
+    if (n !== undefined) { ensureAudio(); started = true; pick(n); }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) return;
+    runId++; stopSpeech();
+    if (game.state === 'showing') { game.idx = 0; setState('input'); }
+  });
+
+  async function startNative() {
+    if (!isNative) return;
+    if (nTTS) {
+      try {
+        for (const l of ['es-AR', 'es-MX', 'es-US', 'es-ES', 'es']) {
+          const r = await nTTS.isLanguageSupported({ lang: l });
+          if (r && r.supported) { ttsLang = l; break; }
+        }
+      } catch (e) {}
+    }
+    if (nReader) {
+      try { const st = await nReader.isEnabled(); voiceMode = (st && st.value) ? 'lector' : 'app'; } catch (e) {}
+      try {
+        nReader.addListener('screenReaderStateChange', (st) => {
+          const on = !!(st && st.value);
+          if (on === (voiceMode === 'lector')) return;
+          voiceMode = on ? 'lector' : 'app'; stopSpeech(); render();
+          if (!on) say('Lector de pantalla desactivado. Ahora habla la app.');
+        });
+      } catch (e) {}
+      render();
+    }
+    if (voiceMode === 'lector') {
+      started = true;
+      say(INTRO);
+    } else {
+      say('Toc\u00e1 la pantalla para empezar');
+      capEl.classList.remove('long'); capEl.textContent = 'Toc\u00e1 la pantalla para empezar'; capEl.hidden = false;
+    }
+  }
+
+  render();
+  startNative();
+})();
+</script>
+</body>
+</html>

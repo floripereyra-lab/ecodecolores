@@ -1,0 +1,39 @@
+name: iPhone - comprobación de compilación
+
+# Se ejecuta a mano (Actions > este flujo > Run workflow).
+# Comprueba que la app compila para iPhone. Para instalarla en un iPhone o subirla a la
+# App Store hace falta una cuenta de Apple Developer y la firma; eso se agrega después.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: npm install --legacy-peer-deps
+
+      - name: Crear el proyecto iPhone
+        run: npx cap add ios
+
+      - name: Ajustes de iPhone
+        run: node scripts/patch-ios.mjs
+
+      - name: Ícono y pantalla de inicio
+        continue-on-error: true
+        run: npx capacitor-assets generate --ios
+
+      - name: Copiar la web a la app
+        run: npx cap sync ios
+
+      - name: Compilar para el simulador
+        run: |
+          if [ -d ios/App/App.xcworkspace ]; then TARGET="-workspace ios/App/App.xcworkspace"; else TARGET="-project ios/App/App.xcodeproj"; fi
+          xcodebuild $TARGET -scheme App -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO

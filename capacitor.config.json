@@ -1,0 +1,12 @@
+{
+  "appId": "app.ecodecolores",
+  "appName": "Eco de Colores",
+  "webDir": "www",
+  "backgroundColor": "#0e1118",
+  "ios": {
+    "contentInset": "never"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
